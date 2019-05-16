@@ -1,0 +1,26 @@
+test:
+  psql:
+    server:
+    port:
+    database:
+    user:
+    password:
+  path_snap:
+  api_host:
+local:
+  psql:
+    server:
+    port:
+    database:
+    user:
+    password:
+  path_snap:
+  api_host:
+dev:
+  psql:
+    server:
+    port:
+    database:
+    user:
+    password:
+  api_host:
