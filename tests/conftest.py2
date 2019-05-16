@@ -1,0 +1,75 @@
+import pytest
+from helpers.db.manager import db_manager
+
+
+def pytest_addoption(parser):
+    # Test categorisation
+    parser.addoption('--categories', action='store', metavar='NAME',
+                     help='only run tests matches with categories')
+    parser.addoption("--stringinput", action="append", default=[],
+                     help="list of stringinputs to pass to test functions")
+
+
+def pytest_generate_tests(metafunc):
+    if 'stringinput' in metafunc.fixturenames:
+        metafunc.parametrize("stringinput",
+                             metafunc.config.getoption('stringinput'))
+
+
+def pytest_configure(config):
+    config.addinivalue_line('markers',
+                            'categories(params): mark the test (ex. suite=sanity, severity=critical, component=cart)')
+
+
+@pytest.fixture(scope='session', autouse=True)
+def make_restore_snapshop():
+    db_manager.create_snapshot()
+
+    yield
+    db_manager.restore_from_snapshot()
+    db_manager.delete_snapshot()
+    return True
+
+
+def pytest_collection_modifyitems(session, config, items):
+    market_categories = config.option.categories
+    if not market_categories or market_categories == 'all':
+        return
+
+    categories_filter = dict(x.split('=') for x in market_categories.split(','))
+    if not categories_filter:
+        return
+
+    selected = []
+    deselected = []
+    for item in items:
+        markers_on_tests = item.get_marker('categories')
+        if not markers_on_tests:
+            deselected.append(item)
+            continue
+
+        found = False
+        for category_filter in categories_filter:
+            if not markers_on_tests.kwargs.get(category_filter):
+                deselected.append(item)
+                found = True
+                break
+
+            if categories_filter[category_filter] not in markers_on_tests.kwargs.get(category_filter):
+                deselected.append(item)
+                found = True
+                break
+
+        if not found:
+            selected.append(item)
+
+    if deselected:
+        config.hook.pytest_deselected(items=deselected)
+        items[:] = selected
+
+
+@pytest.mark.tryfirst
+def pytest_runtest_makereport(item, call, __multicall__):
+    rep = __multicall__.execute()
+    setattr(item, "rep_" + rep.when, rep)
+    return rep
